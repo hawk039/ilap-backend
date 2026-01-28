@@ -91,10 +91,20 @@ ILAP/
 ## Current Capabilities
 
 * Ingests real Indian legal text (sample scope)
-* Stores semantic embeddings with metadata
-* Retrieves relevant sections for a query
-* Returns explainable, citation-backed responses
-* Safely refuses unsupported or low-confidence queries
+
+* Stores semantic embeddings with structured legal metadata
+
+* Retrieves relevant statutory sections using similarity search
+
+* Implements intent-aware retrieval gating to prevent semantic false positives
+
+* Returns explainable, citation-backed responses with proof excerpts
+
+* Calibrates confidence scores based on retrieval strength and corroboration
+
+* Safely refuses unsupported, non-legal, or low-confidence queries
+
+* Enforces source-of-truth answering to eliminate hallucinations
 
 ---
 
