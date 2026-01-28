@@ -7,6 +7,7 @@ from typing import List, Dict, Any
 # Configuration (should match ingestion script)
 CHROMA_DB_PATH = Path(__file__).parent.parent.parent / "chroma_db"
 COLLECTION_NAME = "legal_knowledge_base"
+SIMILARITY_THRESHOLD = 0.5 # Updated to 0.5 as per strict acceptance rule
 
 def get_legal_sources():
     config_path = Path(__file__).parent.parent.parent / "config" / "legal_sources.yaml"
@@ -17,8 +18,6 @@ def retrieve_sections(query: str) -> List[Dict[str, Any]]:
     legal_sources = get_legal_sources()
     
     # Initialize Chroma Client
-    # Note: In a production app, you'd want to initialize this once (e.g., in a startup event)
-    # and pass it around, rather than creating it on every request.
     client = chromadb.PersistentClient(path=str(CHROMA_DB_PATH))
     
     embedding_func = embedding_functions.SentenceTransformerEmbeddingFunction(model_name="all-MiniLM-L6-v2")
@@ -33,25 +32,41 @@ def retrieve_sections(query: str) -> List[Dict[str, Any]]:
         return []
 
     # Query the collection
+    # We fetch 3 results max as requested
     results = collection.query(
         query_texts=[query],
-        n_results=3 # Retrieve top 3 matches
+        n_results=3 
     )
 
-    # Transform results to the expected format
     matches = []
+    seen_sections = set()
+
     if results["documents"]:
         for i, doc_text in enumerate(results["documents"][0]):
+            distance = results["distances"][0][i] if results["distances"] else 1.0
+            similarity = 1 - distance
+            
+            if similarity < SIMILARITY_THRESHOLD:
+                continue
+
             metadata = results["metadatas"][0][i]
+            section_id = f"{metadata.get('law', 'Unknown')}_{metadata.get('section', 'Unknown')}"
+            
+            # Deduplicate by section (keep highest score, which comes first)
+            if section_id in seen_sections:
+                continue
+            
+            seen_sections.add(section_id)
+
             matches.append({
-                "act": metadata.get("law", "Unknown Act"), # Updated key
+                "act": metadata.get("law", "Unknown Act"),
                 "section": metadata.get("section", "Unknown Section"),
                 "title": "Unknown Title", 
                 "text": doc_text,
                 "effective_from": metadata.get("version", "Unknown Date"),
-                "type": metadata.get("type", "bare_act"), # Updated key usage
+                "type": metadata.get("type", "bare_act"),
                 "exact_match": False, 
-                "relevance_score": results["distances"][0][i] if results["distances"] else 0.0
+                "relevance_score": similarity
             })
 
     return matches

@@ -10,13 +10,11 @@ CHROMA_DB_PATH = Path(__file__).parent.parent / "chroma_db"
 BNS_FILE_PATH = Path(__file__).parent.parent / "knowledge_base" / "BNS" / "v2024" / "bns.txt"
 COLLECTION_NAME = "legal_knowledge_base"
 
-def read_and_chunk_file(file_path: Path, chunk_size: int = 800):
+def read_and_chunk_file(file_path: Path):
     """
-    Reads the file and splits it into chunks.
-    Simple rule:
-    - Split by blank lines
-    - Merge small chunks
-    - Max ~800 chars
+    Reads the file and splits it into chunks based on legal sections.
+    Goal: One chunk ≈ one legal section.
+    Regex used: Matches "Section 1." or just "1." at start of lines.
     """
     if not file_path.exists():
         print(f"Error: File not found at {file_path}")
@@ -25,39 +23,46 @@ def read_and_chunk_file(file_path: Path, chunk_size: int = 800):
     with open(file_path, "r", encoding="utf-8") as f:
         text = f.read()
 
-    # Split by blank lines (double newlines)
-    paragraphs = text.split("\n\n")
-    chunks = []
-    current_chunk = ""
-
-    for para in paragraphs:
-        para = para.strip()
-        if not para:
-            continue
-            
-        # If adding this paragraph keeps us under the limit, add it
-        if len(current_chunk) + len(para) < chunk_size:
-            current_chunk += para + "\n\n"
-        else:
-            # Otherwise, save the current chunk and start a new one
-            if current_chunk:
-                chunks.append(current_chunk.strip())
-            current_chunk = para + "\n\n"
+    # Regex to identify section starts.
+    # Matches:
+    # (?:\n|^)          -> Start of line or string
+    # (?:Section\s+)?   -> Optional "Section " word
+    # (\d+[A-Za-z]*)    -> Section number (e.g., 1, 303, 45A) - Capturing group 1
+    # \.                -> Literal dot
+    pattern = r'(?:\n|^)((?:Section\s+)?\d+[A-Za-z]*)\.'
     
-    # Add the last chunk if it exists
-    if current_chunk:
-        chunks.append(current_chunk.strip())
+    # Split the text. 
+    # re.split with capturing group returns [preamble, section_num_1, content_1, section_num_2, content_2, ...]
+    parts = re.split(pattern, text)
+    
+    chunks = []
+    
+    # The first part is usually preamble/title/chapter info before Section 1
+    if parts[0].strip():
+        chunks.append(parts[0].strip())
+    
+    # Iterate through the rest of the parts in pairs (number, content)
+    for i in range(1, len(parts), 2):
+        section_identifier = parts[i] # e.g., "1" or "Section 303"
+        section_content = parts[i+1] if i+1 < len(parts) else ""
+        
+        # Combine identifier and content
+        # We add the dot back since it was consumed by the split but not captured in the group
+        full_section = f"{section_identifier}.{section_content}".strip()
+        
+        if full_section:
+            chunks.append(full_section)
 
     return chunks
 
 def extract_section(text: str) -> str:
     """
     Attempts to extract a section number from the start of the text.
-    Looks for patterns like "1.", "Section 1", "123.", etc.
     """
-    match = re.match(r"^(Section\s+)?(\d+[A-Za-z]*)\.?", text)
+    # Matches "Section 123" or "123" at the start
+    match = re.match(r"^(?:Section\s+)?(\d+[A-Za-z]*)", text)
     if match:
-        return match.group(2)
+        return match.group(1)
     return "Unknown"
 
 def ingest_data():
@@ -103,7 +108,7 @@ def ingest_data():
             "version": "2024",
             "source": "India Code",
             "type": "criminal_law",
-            "section": extract_section(chunk) # Keeping this as it's useful
+            "section": extract_section(chunk) 
         })
 
     collection.add(
