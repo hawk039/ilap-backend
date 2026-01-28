@@ -1,0 +1,20 @@
+- id: valid_theft
+  query: "What is the punishment for theft in India?"
+  expected:
+    should_answer: true
+    section: "303"
+
+- id: non_legal_relationship
+  query: "What is the punishment for cheating in relationships?"
+  expected:
+    should_answer: false
+
+- id: vague_query
+  query: "Tell me about cheating"
+  expected:
+    should_answer: false
+
+- id: outdated_law
+  query: "Is adultery a crime in India?"
+  expected:
+    should_answer: false
