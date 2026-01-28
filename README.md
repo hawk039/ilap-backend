@@ -106,6 +106,12 @@ ILAP/
 
 * Enforces source-of-truth answering to eliminate hallucinations
 
+* Built an evaluation harness to test legal retrieval precision, refusal correctness, and confidence calibration
+
+* Designed regression-safe workflows for future legal updates
+
+
+
 ---
 
 ## Non-Goals (By Design)
