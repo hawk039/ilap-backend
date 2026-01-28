@@ -1,0 +1,27 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "proof": {
+      "type": "object",
+      "properties": {
+        "sources": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "act": { "type": "string" },
+              "section": { "type": "string" },
+              "text_snippet": { "type": "string" },
+              "relevance_score": { "type": "number" }
+            },
+            "required": ["act", "section", "text_snippet"]
+          }
+        },
+        "reasoning": { "type": "string" }
+      },
+      "required": ["sources", "reasoning"]
+    }
+  },
+  "required": ["proof"]
+}

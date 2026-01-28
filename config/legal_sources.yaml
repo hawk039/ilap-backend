@@ -1,0 +1,23 @@
+bare_acts:
+  - name: "Bharatiya Nyaya Sanhita"
+    short: "BNS"
+    authority: "India Code"
+    last_verified: "2024-12-01"
+
+  - name: "Information Technology Act"
+    short: "IT Act"
+    authority: "India Code"
+    last_verified: "2022-08-01"
+
+judgments:
+  allowed_courts:
+    - Supreme Court of India
+    - High Courts
+
+circulars:
+  allowed_ministries:
+    - Ministry of Electronics and IT
+    - Ministry of Home Affairs
+
+rules:
+  - name: "IT Rules 2021"
