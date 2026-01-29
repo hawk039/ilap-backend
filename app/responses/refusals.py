@@ -3,3 +3,4 @@ INSUFFICIENT_SOURCE = "Relevant law exists, but authoritative source is missing.
 OUTDATED_DATA = "Law found, but amendment status is uncertain."
 NON_LEGAL_QUERY = "This query does not appear to be related to Indian law."
 UNDERSPECIFIED_QUERY = "Please provide more specific legal details or keywords (e.g., 'section', 'act', 'crime')."
+MODEL_EMPTY_RESPONSE = "The model could not generate a response based on the provided information."
