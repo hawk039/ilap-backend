@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+chromadb
+pydantic
+pyyaml
+google-genai
+python-dotenv
+pymupdf
