@@ -1,9 +1,9 @@
 fastapi
 uvicorn
-pyyaml
-pydantic
 chromadb
 sentence-transformers
-python-dotenv
+pydantic
+pyyaml
 google-genai
+python-dotenv
 pymupdf
