@@ -24,12 +24,19 @@ STOPWORDS = {
     "punishment","penalty"
 }
 
-def _get_collection():
-    client = chromadb.PersistentClient(path=str(CHROMA_DB_PATH))
-    embedding_func = embedding_functions.SentenceTransformerEmbeddingFunction(
+# --- GLOBAL INITIALIZATION (Load once at startup) ---
+print("Initializing ChromaDB and Embedding Model...")
+try:
+    _CLIENT = chromadb.PersistentClient(path=str(CHROMA_DB_PATH))
+    _EMBEDDING_FUNC = embedding_functions.SentenceTransformerEmbeddingFunction(
         model_name="all-MiniLM-L6-v2"
     )
-    return client.get_collection(name=COLLECTION_NAME, embedding_function=embedding_func)
+    _COLLECTION = _CLIENT.get_collection(name=COLLECTION_NAME, embedding_function=_EMBEDDING_FUNC)
+    print("ChromaDB and Embedding Model initialized successfully.")
+except Exception as e:
+    print(f"CRITICAL ERROR initializing ChromaDB: {e}")
+    _COLLECTION = None
+# ----------------------------------------------------
 
 def _normalize_meta(meta: dict) -> dict:
     # Support both old and new metadata keys
@@ -101,10 +108,8 @@ def _format_matches(docs: List[str], metas: List[dict], sims: List[float]) -> Li
     return matches
 
 def retrieve_sections(query: str) -> List[Dict[str, Any]]:
-    try:
-        collection = _get_collection()
-    except Exception as e:
-        print(f"Error accessing collection: {e}")
+    if _COLLECTION is None:
+        print("Error: Collection not initialized.")
         return []
 
     intent = _intent_type(query)
@@ -114,7 +119,7 @@ def retrieve_sections(query: str) -> List[Dict[str, Any]]:
         sec = _extract_section_number(query)
         if sec:
             # If query mentions BNS/IPC, you can add act filters; for now keep it simple:
-            res = collection.get(
+            res = _COLLECTION.get(
                 where={"section": str(sec)},
                 include=["documents", "metadatas"]
             )
@@ -130,7 +135,7 @@ def retrieve_sections(query: str) -> List[Dict[str, Any]]:
                 return out[:FINAL_K]
 
     # 2) High-recall semantic retrieval
-    results = collection.query(query_texts=[query], n_results=CANDIDATES_K)
+    results = _COLLECTION.query(query_texts=[query], n_results=CANDIDATES_K)
 
     if not results or not results.get("documents") or not results["documents"][0]:
         return []
