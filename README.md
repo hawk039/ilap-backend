@@ -142,3 +142,19 @@ ILAP provides **informational legal content only**. It is not a substitute for p
 ## Author
 
 Built as a systems-first GenAI project to demonstrate production-grade AI architecture, not a chatbot demo.
+
+## Quick Start
+
+```bash
+# create venv
+python -m venv .venv
+source .venv/bin/activate
+
+# install deps
+pip install -r requirements.txt
+
+# run ingestion (example)
+python scripts/ingest_bns.py
+
+# start API
+uvicorn app.main:app --reload
