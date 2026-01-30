@@ -32,26 +32,33 @@ def classify_intent(query: str) -> str:
     return "underspecified_legal"
 
 def calculate_confidence(docs: List[Dict[str, Any]]) -> float:
-    """
-    Calculates confidence score based on heuristics.
-    """
     if not docs:
         return 0.0
-    
-    base_score = max([doc.get("relevance_score", 0.0) for doc in docs])
-    score = base_score
-    
-    punishment_keywords = ["punishment", "imprisonment", "fine", "death", "forfeiture", "rigorous", "simple"]
-    # Use the robust doc_text helper
-    has_punishment = any(any(k in doc_text(doc).lower() for k in punishment_keywords) for doc in docs)
-    if has_punishment:
-        score += 0.2
-        
-    is_fresh = any("2023" in str(doc.get("effective_from", "")) or "2024" in str(doc.get("effective_from", "")) for doc in docs)
-    if is_fresh:
-        score += 0.1
-        
-    return min(score, 0.9)
+
+    base = max(float(d.get("relevance_score", 0.0)) for d in docs)
+
+    # If we got an exact section lookup, that's very reliable
+    if any(d.get("exact_match") for d in docs):
+        return 0.95
+
+    # Punishment anchor presence boosts confidence, but modestly
+    text_blob = "\n\n".join(d.get("text", "") for d in docs).lower()
+    has_anchor = any(a in text_blob for a in [
+        "shall be punished", "punished with", "imprisonment", "fine", "death"
+    ])
+
+    score = base
+    if has_anchor:
+        score += 0.10  # not +0.2; keep this conservative
+
+    # Freshness (if your effective_from is a date string, adapt accordingly)
+    eff = " ".join(str(d.get("effective_from", "")) for d in docs)
+    if any(x in eff for x in ["2024", "2023", "2024-07-01"]):
+        score += 0.05
+
+    # Cap
+    return max(0.0, min(score, 0.9))
+
 
 def get_answer(query: str) -> AskResponse:
     # 0. Intent Classification Gate
