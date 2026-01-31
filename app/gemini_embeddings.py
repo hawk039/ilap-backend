@@ -1,5 +1,5 @@
 import os
-from typing import List, Dict, Any
+from typing import List
 from google import genai
 
 class GeminiEmbeddingFunction:
@@ -10,18 +10,33 @@ class GeminiEmbeddingFunction:
         self.client = genai.Client(api_key=self.api_key)
         self.model = model
 
-    # ✅ Chroma expects this
-    def name(self) -> str:
-        return f"gemini::{self.model}"
-
-    # ✅ Some Chroma versions expect this too
-    def get_config(self) -> Dict[str, Any]:
-        return {"model": self.model}
-
-    # Chroma calls this with list[str]
     def __call__(self, input: List[str]) -> List[List[float]]:
-        res = self.client.models.embed_content(
-            model=self.model,
-            contents=input,
-        )
-        return [e.values for e in res.embeddings]
+        # Chroma calls this with a list[str]
+        # We must batch internally to respect Gemini limits (e.g. 100 per call)
+        BATCH_SIZE = 100
+        all_embeddings = []
+        
+        for i in range(0, len(input), BATCH_SIZE):
+            batch = input[i : i + BATCH_SIZE]
+            try:
+                res = self.client.models.embed_content(
+                    model=self.model,
+                    contents=batch,
+                )
+                # google-genai returns embeddings aligned with contents
+                # Each embedding object has a .values attribute
+                batch_embeddings = [e.values for e in res.embeddings]
+                all_embeddings.extend(batch_embeddings)
+            except Exception as e:
+                print(f"Error embedding batch {i}: {e}")
+                # In case of error, we might want to raise or return empty/zeros
+                # Raising is safer to avoid silent failures
+                raise e
+
+        return all_embeddings
+
+    def name(self) -> str:
+        return "GeminiEmbeddingFunction"
+
+    def get_config(self) -> dict:
+        return {"model": self.model}

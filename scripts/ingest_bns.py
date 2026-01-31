@@ -10,15 +10,11 @@ sys.path.append(str(BASE_DIR))
 from app.chroma_store import get_collection
 
 CHUNKS_FILE_PATH = BASE_DIR / "knowledge_base" / "BNS" / "v2024" / "bns_chunks.json"
+BATCH_SIZE = 100  # Gemini limit per embed batch (keep <= 100)
 
 def ingest_data():
     # Get collection from centralized store (uses Gemini embeddings)
     collection = get_collection()
-    
-    # Optional: Clear existing data if you want a fresh start
-    # collection.delete() # Be careful with this in production!
-    # For now, we'll just add/upsert. If you want to clear, you might need to access the client directly
-    # or just delete the chroma_db folder manually.
     
     if not CHUNKS_FILE_PATH.exists():
         print(f"Error: Chunks file not found at {CHUNKS_FILE_PATH}")
@@ -31,27 +27,43 @@ def ingest_data():
         print("No data to ingest.")
         return
 
-    print(f"Found {len(chunks)} chunks. Ingesting...")
+    print(f"Found {len(chunks)} chunks. Ingesting in batches of {BATCH_SIZE}...")
 
-    docs, metas, ids = [], [], []
     section_counts = defaultdict(int)
+
+    batch_docs, batch_metas, batch_ids = [], [], []
+    total_ingested = 0
+
+    def flush_batch():
+        nonlocal total_ingested, batch_docs, batch_metas, batch_ids
+        if not batch_docs:
+            return
+
+        # If you re-run ingestion often, prefer upsert instead of add
+        # (add will error if IDs already exist)
+        try:
+            collection.upsert(documents=batch_docs, metadatas=batch_metas, ids=batch_ids)
+        except AttributeError:
+            # fallback if your chroma version doesn't have upsert
+            collection.add(documents=batch_docs, metadatas=batch_metas, ids=batch_ids)
+
+        total_ingested += len(batch_docs)
+        print(f"Ingested {total_ingested} / {len(chunks)}")
+
+        batch_docs = []
+        batch_metas = []
+        batch_ids = []
 
     for c in chunks:
         section = c["section"]
-        # Handle duplicate sections by appending an index
+
         count = section_counts[section]
-        if count == 0:
-            unique_id = f'BNS_2024_{section}'
-        else:
-            unique_id = f'BNS_2024_{section}_{count}'
-        
+        unique_id = f'BNS_2024_{section}' if count == 0 else f'BNS_2024_{section}_{count}'
         section_counts[section] += 1
-        
-        ids.append(unique_id)
-        docs.append(c["text"])
-        
-        # Metadata for filtering and citation
-        metas.append({
+
+        batch_ids.append(unique_id)
+        batch_docs.append(c["text"])
+        batch_metas.append({
             "law": c["act"],
             "act": c["act"],
             "section": c["section"],
@@ -60,10 +72,11 @@ def ingest_data():
             "type": "bare_act"
         })
 
-    # Add to collection
-    collection.add(documents=docs, metadatas=metas, ids=ids)
+        if len(batch_docs) >= BATCH_SIZE:
+            flush_batch()
 
-    print(f"Successfully ingested {len(docs)} chunks into collection.")
+    flush_batch()
+    print(f"✅ Successfully ingested {total_ingested} chunks.")
 
 if __name__ == "__main__":
     ingest_data()
