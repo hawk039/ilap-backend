@@ -1,15 +1,6 @@
 import re
-import os
-import chromadb
-from chromadb.utils import embedding_functions
-from pathlib import Path
 from typing import List, Dict, Any, Optional
-
-# Configuration
-# Use environment variable or default to local path relative to project root
-DEFAULT_CHROMA_PATH = Path(__file__).parent.parent.parent / "chroma_db"
-CHROMA_DB_PATH = os.getenv("CHROMA_PERSIST_DIR", str(DEFAULT_CHROMA_PATH))
-COLLECTION_NAME = "legal_knowledge_base"
+from app.chroma_store import get_collection
 
 # Retrieval tuning
 CANDIDATES_K = 25          # high recall
@@ -26,21 +17,6 @@ STOPWORDS = {
     "under","section","bns","ipc","bnss","bsa","act","please","explain",
     "punishment","penalty"
 }
-
-# --- GLOBAL INITIALIZATION (Load once at startup) ---
-print(f">>> CHROMA PATH USED: {CHROMA_DB_PATH}")
-try:
-    _CLIENT = chromadb.PersistentClient(path=CHROMA_DB_PATH)
-    _EMBEDDING_FUNC = embedding_functions.SentenceTransformerEmbeddingFunction(
-        model_name="all-MiniLM-L6-v2"
-    )
-    # Use get_or_create to avoid startup crash if collection doesn't exist yet
-    _COLLECTION = _CLIENT.get_or_create_collection(name=COLLECTION_NAME, embedding_function=_EMBEDDING_FUNC)
-    print("ChromaDB and Embedding Model initialized successfully.")
-except Exception as e:
-    print(f"CRITICAL ERROR initializing ChromaDB: {e}")
-    _COLLECTION = None
-# ----------------------------------------------------
 
 def _normalize_meta(meta: dict) -> dict:
     # Support both old and new metadata keys
@@ -112,8 +88,11 @@ def _format_matches(docs: List[str], metas: List[dict], sims: List[float]) -> Li
     return matches
 
 def retrieve_sections(query: str) -> List[Dict[str, Any]]:
-    if _COLLECTION is None:
-        print("Error: Collection not initialized.")
+    try:
+        # Use the centralized collection accessor
+        collection = get_collection()
+    except Exception as e:
+        print(f"Error accessing collection: {e}")
         return []
 
     intent = _intent_type(query)
@@ -122,24 +101,21 @@ def retrieve_sections(query: str) -> List[Dict[str, Any]]:
     if intent == "section_lookup":
         sec = _extract_section_number(query)
         if sec:
-            # If query mentions BNS/IPC, you can add act filters; for now keep it simple:
-            res = _COLLECTION.get(
+            res = collection.get(
                 where={"section": str(sec)},
                 include=["documents", "metadatas"]
             )
             if res and res.get("documents"):
-                # Build matches with high confidence-like score
                 docs = res["documents"]
                 metas = res["metadatas"]
                 sims = [0.99] * len(docs)
                 out = _format_matches(docs, metas, sims)
-                # mark exact_match True
                 for m in out:
                     m["exact_match"] = True
                 return out[:FINAL_K]
 
     # 2) High-recall semantic retrieval
-    results = _COLLECTION.query(query_texts=[query], n_results=CANDIDATES_K)
+    results = collection.query(query_texts=[query], n_results=CANDIDATES_K)
 
     if not results or not results.get("documents") or not results["documents"][0]:
         return []

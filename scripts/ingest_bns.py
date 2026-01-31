@@ -1,34 +1,25 @@
 import json
-import chromadb
-from chromadb.utils import embedding_functions
+import sys
 from pathlib import Path
 from collections import defaultdict
 
-# Configuration
+# Add project root to sys.path to allow imports from app
 BASE_DIR = Path(__file__).parent.parent
-CHROMA_DB_PATH = BASE_DIR / "chroma_db"
+sys.path.append(str(BASE_DIR))
+
+from app.chroma_store import get_collection
+
 CHUNKS_FILE_PATH = BASE_DIR / "knowledge_base" / "BNS" / "v2024" / "bns_chunks.json"
-COLLECTION_NAME = "legal_knowledge_base"
 
 def ingest_data():
-    # Initialize Chroma Client
-    client = chromadb.PersistentClient(path=str(CHROMA_DB_PATH))
+    # Get collection from centralized store (uses Gemini embeddings)
+    collection = get_collection()
     
-    # Using default embedding function (all-MiniLM-L6-v2)
-    embedding_func = embedding_functions.SentenceTransformerEmbeddingFunction(model_name="all-MiniLM-L6-v2")
+    # Optional: Clear existing data if you want a fresh start
+    # collection.delete() # Be careful with this in production!
+    # For now, we'll just add/upsert. If you want to clear, you might need to access the client directly
+    # or just delete the chroma_db folder manually.
     
-    # Rebuild from scratch (MVP friendly)
-    try:
-        client.delete_collection(COLLECTION_NAME)
-        print(f"Deleted existing collection '{COLLECTION_NAME}' to start fresh.")
-    except Exception:
-        pass
-
-    collection = client.create_collection(
-        name=COLLECTION_NAME,
-        embedding_function=embedding_func
-    )
-
     if not CHUNKS_FILE_PATH.exists():
         print(f"Error: Chunks file not found at {CHUNKS_FILE_PATH}")
         return
@@ -61,18 +52,18 @@ def ingest_data():
         
         # Metadata for filtering and citation
         metas.append({
-            "law": c["act"], # Mapping 'act' to 'law' to match retrieval service expectation
+            "law": c["act"],
             "act": c["act"],
             "section": c["section"],
             "effective_from": c["effective_from"],
             "version": "v2024",
-            "type": "bare_act" # Adding type for confidence scoring
+            "type": "bare_act"
         })
 
     # Add to collection
     collection.add(documents=docs, metadatas=metas, ids=ids)
 
-    print(f"Successfully ingested {len(docs)} chunks into collection '{COLLECTION_NAME}' at {CHROMA_DB_PATH}")
+    print(f"Successfully ingested {len(docs)} chunks into collection.")
 
 if __name__ == "__main__":
     ingest_data()
