@@ -40,3 +40,9 @@ class GeminiEmbeddingFunction:
 
     def get_config(self) -> dict:
         return {"model": self.model}
+
+    def embed_documents(self, texts: List[str]) -> List[List[float]]:
+        return self(texts)
+
+    def embed_query(self, text: str) -> List[float]:
+        return self([text])[0]
