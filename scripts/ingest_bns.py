@@ -1,21 +1,40 @@
 import json
 import sys
+import chromadb
 from pathlib import Path
 from collections import defaultdict
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Add project root to sys.path to allow imports from app
 BASE_DIR = Path(__file__).parent.parent
 sys.path.append(str(BASE_DIR))
 
-from app.chroma_store import get_collection
+from app.chroma_store import get_collection, CHROMA_PATH, COLLECTION_NAME
 
 CHUNKS_FILE_PATH = BASE_DIR / "knowledge_base" / "BNS" / "v2024" / "bns_chunks.json"
 BATCH_SIZE = 100  # Gemini limit per embed batch (keep <= 100)
 
 def ingest_data():
-    # Get collection from centralized store (uses Gemini embeddings)
-    collection = get_collection()
-    
+    # 1. FORCE RESET: Delete existing collection to resolve embedding mismatch
+    print(f"Resetting collection '{COLLECTION_NAME}' at {CHROMA_PATH}...")
+    try:
+        client = chromadb.PersistentClient(path=CHROMA_PATH)
+        client.delete_collection(COLLECTION_NAME)
+        print("✅ Deleted old collection.")
+    except Exception as e:
+        print(f"ℹ️ Collection delete skipped (might not exist): {e}")
+
+    # 2. Get (re-create) collection with NEW embedding function
+    try:
+        collection = get_collection()
+    except RuntimeError as e:
+        print(f"Error initializing collection: {e}")
+        print("Make sure GEMINI_API_KEY is set in your .env file.")
+        return
+
     if not CHUNKS_FILE_PATH.exists():
         print(f"Error: Chunks file not found at {CHUNKS_FILE_PATH}")
         return
