@@ -1,5 +1,5 @@
 import os
-from typing import List, Optional, Union
+from typing import List, Optional, Union, Any
 from google import genai
 
 class GeminiEmbeddingFunction:
@@ -48,9 +48,11 @@ class GeminiEmbeddingFunction:
              raise ValueError("Either 'texts' or 'input' must be provided")
         return self(texts)
 
-    def embed_query(self, text: Optional[str] = None, input: Optional[str] = None) -> List[float]:
+    def embed_query(self, text: Optional[str] = None, input: Optional[str] = None) -> Any:
         if text is None:
             text = input
         if text is None:
              raise ValueError("Either 'text' or 'input' must be provided")
-        return self([text])[0]
+        # User requested fix: return the list of vectors (which contains 1 vector), not the vector itself
+        # This seems to imply the caller expects a list of lists.
+        return self([text])
