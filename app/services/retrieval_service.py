@@ -1,11 +1,14 @@
 import re
+import os
 import chromadb
 from chromadb.utils import embedding_functions
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 
 # Configuration
-CHROMA_DB_PATH = Path(__file__).parent.parent.parent / "chroma_db"
+# Use environment variable or default to local path relative to project root
+DEFAULT_CHROMA_PATH = Path(__file__).parent.parent.parent / "chroma_db"
+CHROMA_DB_PATH = os.getenv("CHROMA_PERSIST_DIR", str(DEFAULT_CHROMA_PATH))
 COLLECTION_NAME = "legal_knowledge_base"
 
 # Retrieval tuning
@@ -25,13 +28,14 @@ STOPWORDS = {
 }
 
 # --- GLOBAL INITIALIZATION (Load once at startup) ---
-print("Initializing ChromaDB and Embedding Model...")
+print(f">>> CHROMA PATH USED: {CHROMA_DB_PATH}")
 try:
-    _CLIENT = chromadb.PersistentClient(path=str(CHROMA_DB_PATH))
+    _CLIENT = chromadb.PersistentClient(path=CHROMA_DB_PATH)
     _EMBEDDING_FUNC = embedding_functions.SentenceTransformerEmbeddingFunction(
         model_name="all-MiniLM-L6-v2"
     )
-    _COLLECTION = _CLIENT.get_collection(name=COLLECTION_NAME, embedding_function=_EMBEDDING_FUNC)
+    # Use get_or_create to avoid startup crash if collection doesn't exist yet
+    _COLLECTION = _CLIENT.get_or_create_collection(name=COLLECTION_NAME, embedding_function=_EMBEDDING_FUNC)
     print("ChromaDB and Embedding Model initialized successfully.")
 except Exception as e:
     print(f"CRITICAL ERROR initializing ChromaDB: {e}")
