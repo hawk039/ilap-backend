@@ -1,5 +1,5 @@
 import os
-from typing import List
+from typing import List, Dict, Any
 from google import genai
 
 class GeminiEmbeddingFunction:
@@ -10,11 +10,18 @@ class GeminiEmbeddingFunction:
         self.client = genai.Client(api_key=self.api_key)
         self.model = model
 
+    # ✅ Chroma expects this
+    def name(self) -> str:
+        return f"gemini::{self.model}"
+
+    # ✅ Some Chroma versions expect this too
+    def get_config(self) -> Dict[str, Any]:
+        return {"model": self.model}
+
+    # Chroma calls this with list[str]
     def __call__(self, input: List[str]) -> List[List[float]]:
-        # Chroma calls this with a list[str]
         res = self.client.models.embed_content(
             model=self.model,
             contents=input,
         )
-        # google-genai returns embeddings aligned with contents
         return [e.values for e in res.embeddings]
