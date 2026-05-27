@@ -14,7 +14,7 @@ async def ask_ai_service(settings: Settings, payload: AIServiceRequest, request_
         async with httpx.AsyncClient(timeout=settings.ai_service_timeout_seconds) as client:
             response = await client.post(
                 f"{settings.ai_service_base_url.rstrip('/')}/ask",
-                json=payload.model_dump(mode="json", by_alias=True),
+                json=payload.model_dump(mode="json", by_alias=True, exclude_none=True),
                 headers={"X-Request-Id": request_id},
             )
             response.raise_for_status()
@@ -23,13 +23,13 @@ async def ask_ai_service(settings: Settings, payload: AIServiceRequest, request_
         if settings.ai_stub_mode and settings.environment != "production":
             data = {
                 "answer": (
-                    f"Development AI fallback for {payload.law_type}. "
+                    f"Development AI fallback for {payload.law_type or 'the detected legal category'}. "
                     "Configure the standalone AI service and disable AI_STUB_MODE for production."
                 ),
                 "disclaimer": "This response is informational and not legal advice.",
                 "sessionId": payload.session_id or f"ai_session_{uuid4().hex}",
                 "turnId": f"turn_{uuid4().hex}",
-                "category_note": f"Generated under {payload.law_type}.",
+                "category_note": f"Generated under {payload.law_type or 'an inferred legal category'}.",
             }
         else:
             raise upstream_failure()

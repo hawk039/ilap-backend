@@ -39,6 +39,22 @@ def test_healthcheck(tmp_path: Path):
         assert response.json()["status"] == "ok"
 
 
+def test_legal_categories_expose_ai_law_type_mapping(tmp_path: Path):
+    with build_client(tmp_path) as client:
+        response = client.get("/api/v1/legal-categories")
+        assert response.status_code == 200, response.text
+
+        categories = response.json()
+        assert len(categories) == 6
+
+        consumer_rights = next(item for item in categories if item["lawType"] == "Consumer Rights")
+        assert consumer_rights["aiLawTypes"] == [
+            "consumer_rights",
+            "contract_law",
+            "insurance_law",
+        ]
+
+
 def test_register_login_and_conversation_flow(tmp_path: Path):
     with build_client(tmp_path) as client:
         register = client.post(
@@ -116,3 +132,68 @@ def test_login_requires_verified_email_when_enabled(tmp_path: Path):
             assert response.status_code == 403, response.text
         finally:
             os.environ["REQUIRE_VERIFIED_EMAIL"] = "false"
+
+
+def test_ai_law_type_is_inferred_from_first_citation_for_follow_up_turns(tmp_path: Path, monkeypatch):
+    captured_law_types: list[str | None] = []
+
+    async def fake_ask_ai_service(settings, payload, request_id):
+        captured_law_types.append(payload.law_type)
+        from app.schemas.conversations import AIServiceResponse
+
+        if len(captured_law_types) == 1:
+            return AIServiceResponse(
+                answer="First answer",
+                citations=[
+                    {
+                        "act": "ICA",
+                        "section": "56",
+                        "effectiveFrom": "1872-09-01",
+                        "lawType": "contract_law",
+                    }
+                ],
+                session_id="ai-session-1",
+                turn_id="turn-1",
+                raw_payload={},
+            )
+        return AIServiceResponse(
+            answer="Second answer",
+            citations=[],
+            session_id="ai-session-1",
+            turn_id="turn-2",
+            raw_payload={},
+        )
+
+    monkeypatch.setattr("app.services.conversations.ask_ai_service", fake_ask_ai_service)
+
+    with build_client(tmp_path) as client:
+        register = client.post(
+            "/api/v1/auth/register",
+            json={"fullName": "Test User", "email": "user@example.com", "password": "StrongPass123!"},
+        )
+        assert register.status_code == 201, register.text
+        access_token = register.json()["session"]["accessToken"]
+
+        conversation = client.post(
+            "/api/v1/conversations",
+            headers={"Authorization": f"Bearer {access_token}"},
+            json={"lawType": "Consumer Rights"},
+        )
+        assert conversation.status_code == 201, conversation.text
+        conversation_id = conversation.json()["id"]
+
+        first_ask = client.post(
+            f"/api/v1/conversations/{conversation_id}/ask",
+            headers={"Authorization": f"Bearer {access_token}"},
+            json={"query": "First question"},
+        )
+        assert first_ask.status_code == 200, first_ask.text
+
+        second_ask = client.post(
+            f"/api/v1/conversations/{conversation_id}/ask",
+            headers={"Authorization": f"Bearer {access_token}"},
+            json={"query": "Second question"},
+        )
+        assert second_ask.status_code == 200, second_ask.text
+
+    assert captured_law_types == [None, "contract_law"]

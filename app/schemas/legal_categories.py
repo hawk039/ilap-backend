@@ -7,6 +7,7 @@ class LegalCategoryResponse(APIModel):
     id: str
     name: str
     law_type: str
+    ai_law_types: list[str]
     description: str
     icon: str
     is_active: bool

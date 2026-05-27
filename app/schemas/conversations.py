@@ -25,6 +25,7 @@ class Citation(APIModel):
     act: str
     section: str
     effective_from: str | None = None
+    law_type: str | None = None
 
 
 class ProofSource(APIModel):
@@ -82,7 +83,7 @@ class AskConversationResponse(APIModel):
 
 class AIServiceRequest(APIModel):
     query: str
-    law_type: str
+    law_type: str | None = None
     session_id: str | None = None
     context_turn_id: str | None = None
 

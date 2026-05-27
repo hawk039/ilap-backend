@@ -26,6 +26,20 @@ def _now() -> datetime:
     return datetime.now(UTC)
 
 
+def _resolve_ai_law_type(conversation: Conversation) -> str | None:
+    messages = sorted(conversation.messages, key=lambda item: item.created_at, reverse=True)
+    for message in messages:
+        normalized = message.normalized_answer_payload or {}
+        citations = normalized.get("citations", [])
+        if not citations:
+            continue
+        first_citation = citations[0] or {}
+        law_type = first_citation.get("law_type") or first_citation.get("lawType")
+        if isinstance(law_type, str) and law_type.strip():
+            return law_type.strip()
+    return None
+
+
 def to_summary(conversation: Conversation) -> ConversationSummary:
     preview = None
     if conversation.messages:
@@ -146,7 +160,7 @@ async def ask_conversation(
         settings,
         AIServiceRequest(
             query=query,
-            law_type=conversation.law_type,
+            law_type=_resolve_ai_law_type(conversation),
             session_id=conversation.ai_session_id,
             context_turn_id=conversation.latest_context_turn_id,
         ),

@@ -80,6 +80,7 @@ class LegalCategory(Base, TimestampMixin):
     id: Mapped[str] = mapped_column(String(80), primary_key=True)
     name: Mapped[str] = mapped_column(String(120), nullable=False)
     law_type: Mapped[str] = mapped_column(String(120), nullable=False, unique=True)
+    ai_law_types: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
     description: Mapped[str] = mapped_column(Text, nullable=False)
     icon_key: Mapped[str] = mapped_column(String(60), nullable=False)
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
